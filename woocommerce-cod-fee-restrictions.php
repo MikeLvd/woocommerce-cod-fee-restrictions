@@ -1,14 +1,14 @@
 <?php
 /**
- * Plugin Name: WooCommerce COD Fee Manager
- * Plugin URI: https://yourwebsite.com
- * Description: Adds a configurable fee for Cash on Delivery payment method in WooCommerce 10.0+
+ * Plugin Name: WooCommerce COD Fee & Restrictions Manager
+ * Plugin URI: https://github.com/MikeLvd/woocommerce-cod-fee-restrictions
+ * Description: Adds configurable fees and restrictions for Cash on Delivery payment method in WooCommerce 10.0+
  * Version: 2.0.0
  * Requires at least: 6.8
  * Requires PHP: 8.0
- * Author: Your Name
+ * Author: Mike Lvd
  * License: GPL v2 or later
- * Text Domain: wc-cod-fee
+ * Text Domain: wc-cod-fee-restrictions-restrictions
  * WC requires at least: 9.5
  * WC tested up to: 10.0
  */
@@ -120,7 +120,7 @@ final class CODFeeManager {
      */
     public function add_settings_link(array $links): array {
         $settings_link = '<a href="' . admin_url('admin.php?page=wc-settings&tab=cod_fee') . '">' . 
-                        __('Settings', 'wc-cod-fee') . '</a>';
+                        __('Settings', 'wc-cod-fee-restrictions') . '</a>';
         array_unshift($links, $settings_link);
         return $links;
     }
@@ -129,7 +129,7 @@ final class CODFeeManager {
      * Add settings tab to WooCommerce settings
      */
     public function add_settings_tab(array $settings_tabs): array {
-        $settings_tabs['cod_fee'] = __('COD Fee', 'wc-cod-fee');
+        $settings_tabs['cod_fee'] = __('COD Fee', 'wc-cod-fee-restrictions');
         return $settings_tabs;
     }
     
@@ -137,7 +137,7 @@ final class CODFeeManager {
      * Add section to checkout settings
      */
     public function add_cod_fee_section(array $sections): array {
-        $sections['cod_fee'] = __('Cash on Delivery Fee', 'wc-cod-fee');
+        $sections['cod_fee'] = __('Cash on Delivery Fee', 'wc-cod-fee-restrictions');
         return $sections;
     }
     
@@ -149,22 +149,22 @@ final class CODFeeManager {
             $settings = [];
             
             $settings[] = [
-                'title' => __('Cash on Delivery Fee Settings', 'wc-cod-fee'),
+                'title' => __('Cash on Delivery Fee Settings', 'wc-cod-fee-restrictions'),
                 'type'  => 'title',
-                'desc'  => __('Configure additional fee for Cash on Delivery payment method.', 'wc-cod-fee'),
+                'desc'  => __('Configure additional fee for Cash on Delivery payment method.', 'wc-cod-fee-restrictions'),
                 'id'    => 'cod_fee_options',
             ];
             
             $settings[] = [
-                'title'   => __('Enable COD Fee', 'wc-cod-fee'),
+                'title'   => __('Enable COD Fee', 'wc-cod-fee-restrictions'),
                 'id'      => 'woocommerce_cod_fee_enabled',
                 'type'    => 'checkbox',
                 'default' => 'no',
-                'desc'    => __('Enable Cash on Delivery fee', 'wc-cod-fee'),
+                'desc'    => __('Enable Cash on Delivery fee', 'wc-cod-fee-restrictions'),
             ];
             
             $settings[] = [
-                'title'             => __('Fee Amount', 'wc-cod-fee'),
+                'title'             => __('Fee Amount', 'wc-cod-fee-restrictions'),
                 'id'                => 'woocommerce_cod_fee_amount',
                 'type'              => 'number',
                 'custom_attributes' => [
@@ -172,47 +172,47 @@ final class CODFeeManager {
                     'min'  => '0',
                 ],
                 'default'           => '5',
-                'desc'              => sprintf(__('Enter the fee amount in %s', 'wc-cod-fee'), get_woocommerce_currency()),
+                'desc'              => sprintf(__('Enter the fee amount in %s', 'wc-cod-fee-restrictions'), get_woocommerce_currency()),
                 'desc_tip'          => true,
             ];
             
             $settings[] = [
-                'title'    => __('Fee Type', 'wc-cod-fee'),
+                'title'    => __('Fee Type', 'wc-cod-fee-restrictions'),
                 'id'       => 'woocommerce_cod_fee_type',
                 'type'     => 'select',
                 'default'  => 'fixed',
                 'options'  => [
-                    'fixed'      => __('Fixed Amount', 'wc-cod-fee'),
-                    'percentage' => __('Percentage of Cart Total', 'wc-cod-fee'),
+                    'fixed'      => __('Fixed Amount', 'wc-cod-fee-restrictions'),
+                    'percentage' => __('Percentage of Cart Total', 'wc-cod-fee-restrictions'),
                 ],
-                'desc'     => __('Choose whether the fee is a fixed amount or percentage.', 'wc-cod-fee'),
+                'desc'     => __('Choose whether the fee is a fixed amount or percentage.', 'wc-cod-fee-restrictions'),
                 'desc_tip' => true,
             ];
             
             $settings[] = [
-                'title'    => __('Fee Label', 'wc-cod-fee'),
+                'title'    => __('Fee Label', 'wc-cod-fee-restrictions'),
                 'id'       => 'woocommerce_cod_fee_label',
                 'type'     => 'text',
-                'default'  => __('Cash on Delivery Fee', 'wc-cod-fee'),
-                'desc'     => __('Label displayed at checkout', 'wc-cod-fee'),
+                'default'  => __('Cash on Delivery Fee', 'wc-cod-fee-restrictions'),
+                'desc'     => __('Label displayed at checkout', 'wc-cod-fee-restrictions'),
                 'desc_tip' => true,
             ];
             
             $settings[] = [
-                'title'    => __('Tax Status', 'wc-cod-fee'),
+                'title'    => __('Tax Status', 'wc-cod-fee-restrictions'),
                 'id'       => 'woocommerce_cod_fee_tax_status',
                 'type'     => 'select',
                 'default'  => 'taxable',
                 'options'  => [
-                    'taxable' => __('Taxable', 'wc-cod-fee'),
-                    'none'    => __('Not Taxable', 'wc-cod-fee'),
+                    'taxable' => __('Taxable', 'wc-cod-fee-restrictions'),
+                    'none'    => __('Not Taxable', 'wc-cod-fee-restrictions'),
                 ],
-                'desc'     => __('Is the COD fee taxable?', 'wc-cod-fee'),
+                'desc'     => __('Is the COD fee taxable?', 'wc-cod-fee-restrictions'),
                 'desc_tip' => true,
             ];
             
             $settings[] = [
-                'title'             => __('Minimum Order Amount', 'wc-cod-fee'),
+                'title'             => __('Minimum Order Amount', 'wc-cod-fee-restrictions'),
                 'id'                => 'woocommerce_cod_fee_min_amount',
                 'type'              => 'number',
                 'custom_attributes' => [
@@ -220,12 +220,12 @@ final class CODFeeManager {
                     'min'  => '0',
                 ],
                 'default'           => '0',
-                'desc'              => __('Minimum order amount to apply fee (0 = no minimum)', 'wc-cod-fee'),
+                'desc'              => __('Minimum order amount to apply fee (0 = no minimum)', 'wc-cod-fee-restrictions'),
                 'desc_tip'          => true,
             ];
             
             $settings[] = [
-                'title'             => __('Maximum Order Amount', 'wc-cod-fee'),
+                'title'             => __('Maximum Order Amount', 'wc-cod-fee-restrictions'),
                 'id'                => 'woocommerce_cod_fee_max_amount',
                 'type'              => 'number',
                 'custom_attributes' => [
@@ -233,7 +233,7 @@ final class CODFeeManager {
                     'min'  => '0',
                 ],
                 'default'           => '0',
-                'desc'              => __('Maximum order amount to apply fee (0 = no maximum)', 'wc-cod-fee'),
+                'desc'              => __('Maximum order amount to apply fee (0 = no maximum)', 'wc-cod-fee-restrictions'),
                 'desc_tip'          => true,
             ];
             
@@ -266,20 +266,20 @@ final class CODFeeManager {
     private function get_settings_fields(): array {
         return [
             [
-                'title' => __('Cash on Delivery Fee Settings', 'wc-cod-fee'),
+                'title' => __('Cash on Delivery Fee Settings', 'wc-cod-fee-restrictions'),
                 'type'  => 'title',
-                'desc'  => __('Configure additional fee for Cash on Delivery payment method.', 'wc-cod-fee'),
+                'desc'  => __('Configure additional fee for Cash on Delivery payment method.', 'wc-cod-fee-restrictions'),
                 'id'    => 'cod_fee_section',
             ],
             [
-                'title'   => __('Enable COD Fee', 'wc-cod-fee'),
+                'title'   => __('Enable COD Fee', 'wc-cod-fee-restrictions'),
                 'id'      => 'woocommerce_cod_fee_enabled',
                 'type'    => 'checkbox',
                 'default' => 'no',
-                'desc'    => __('Enable Cash on Delivery fee', 'wc-cod-fee'),
+                'desc'    => __('Enable Cash on Delivery fee', 'wc-cod-fee-restrictions'),
             ],
             [
-                'title'             => __('Fee Amount', 'wc-cod-fee'),
+                'title'             => __('Fee Amount', 'wc-cod-fee-restrictions'),
                 'id'                => 'woocommerce_cod_fee_amount',
                 'type'              => 'number',
                 'custom_attributes' => [
@@ -287,37 +287,37 @@ final class CODFeeManager {
                     'min'  => '0',
                 ],
                 'default'           => '5',
-                'desc'              => sprintf(__('Fee amount in %s', 'wc-cod-fee'), get_woocommerce_currency()),
+                'desc'              => sprintf(__('Fee amount in %s', 'wc-cod-fee-restrictions'), get_woocommerce_currency()),
                 'desc_tip'          => true,
             ],
             [
-                'title'    => __('Fee Type', 'wc-cod-fee'),
+                'title'    => __('Fee Type', 'wc-cod-fee-restrictions'),
                 'id'       => 'woocommerce_cod_fee_type',
                 'type'     => 'select',
                 'default'  => 'fixed',
                 'options'  => [
-                    'fixed'      => __('Fixed Amount', 'wc-cod-fee'),
-                    'percentage' => __('Percentage', 'wc-cod-fee'),
+                    'fixed'      => __('Fixed Amount', 'wc-cod-fee-restrictions'),
+                    'percentage' => __('Percentage', 'wc-cod-fee-restrictions'),
                 ],
             ],
             [
-                'title'    => __('Fee Label', 'wc-cod-fee'),
+                'title'    => __('Fee Label', 'wc-cod-fee-restrictions'),
                 'id'       => 'woocommerce_cod_fee_label',
                 'type'     => 'text',
-                'default'  => __('Cash on Delivery Fee', 'wc-cod-fee'),
+                'default'  => __('Cash on Delivery Fee', 'wc-cod-fee-restrictions'),
             ],
             [
-                'title'    => __('Tax Status', 'wc-cod-fee'),
+                'title'    => __('Tax Status', 'wc-cod-fee-restrictions'),
                 'id'       => 'woocommerce_cod_fee_tax_status',
                 'type'     => 'select',
                 'default'  => 'taxable',
                 'options'  => [
-                    'taxable' => __('Taxable', 'wc-cod-fee'),
-                    'none'    => __('Not Taxable', 'wc-cod-fee'),
+                    'taxable' => __('Taxable', 'wc-cod-fee-restrictions'),
+                    'none'    => __('Not Taxable', 'wc-cod-fee-restrictions'),
                 ],
             ],
             [
-                'title'             => __('Minimum Order', 'wc-cod-fee'),
+                'title'             => __('Minimum Order', 'wc-cod-fee-restrictions'),
                 'id'                => 'woocommerce_cod_fee_min_amount',
                 'type'              => 'number',
                 'custom_attributes' => [
@@ -326,10 +326,10 @@ final class CODFeeManager {
                 ],
                 'default'           => '0',
                 'desc_tip'          => true,
-                'desc'              => __('0 = no minimum', 'wc-cod-fee'),
+                'desc'              => __('0 = no minimum', 'wc-cod-fee-restrictions'),
             ],
             [
-                'title'             => __('Maximum Order', 'wc-cod-fee'),
+                'title'             => __('Maximum Order', 'wc-cod-fee-restrictions'),
                 'id'                => 'woocommerce_cod_fee_max_amount',
                 'type'              => 'number',
                 'custom_attributes' => [
@@ -338,7 +338,7 @@ final class CODFeeManager {
                 ],
                 'default'           => '0',
                 'desc_tip'          => true,
-                'desc'              => __('0 = no maximum', 'wc-cod-fee'),
+                'desc'              => __('0 = no maximum', 'wc-cod-fee-restrictions'),
             ],
             [
                 'type' => 'sectionend',
@@ -353,10 +353,10 @@ final class CODFeeManager {
     public function add_admin_menu(): void {
         add_submenu_page(
             'woocommerce',
-            __('COD Fee Settings', 'wc-cod-fee'),
-            __('COD Fee', 'wc-cod-fee'),
+            __('COD Fee Settings', 'wc-cod-fee-restrictions'),
+            __('COD Fee', 'wc-cod-fee-restrictions'),
             'manage_woocommerce',
-            'wc-cod-fee-settings',
+            'wc-cod-fee-restrictions-settings',
             [$this, 'admin_page']
         );
     }
@@ -374,13 +374,13 @@ final class CODFeeManager {
     public function admin_page(): void {
         ?>
         <div class="wrap">
-            <h1><?php echo esc_html__('Cash on Delivery Fee Settings', 'wc-cod-fee'); ?></h1>
+            <h1><?php echo esc_html__('Cash on Delivery Fee Settings', 'wc-cod-fee-restrictions'); ?></h1>
             
             <div class="notice notice-info">
                 <p>
                     <?php 
                     echo sprintf(
-                        __('You can also configure these settings in %sWooCommerce Settings → COD Fee%s or %sWooCommerce Settings → Payments → Cash on Delivery Fee%s', 'wc-cod-fee'),
+                        __('You can also configure these settings in %sWooCommerce Settings → COD Fee%s or %sWooCommerce Settings → Payments → Cash on Delivery Fee%s', 'wc-cod-fee-restrictions'),
                         '<a href="' . admin_url('admin.php?page=wc-settings&tab=cod_fee') . '">',
                         '</a>',
                         '<a href="' . admin_url('admin.php?page=wc-settings&tab=checkout&section=cod_fee') . '">',
@@ -394,7 +394,7 @@ final class CODFeeManager {
                 <?php 
                 settings_fields('wc_cod_fee_settings');
                 woocommerce_admin_fields($this->get_settings_fields());
-                submit_button(__('Save Changes', 'wc-cod-fee'));
+                submit_button(__('Save Changes', 'wc-cod-fee-restrictions'));
                 ?>
             </form>
         </div>
@@ -409,7 +409,7 @@ final class CODFeeManager {
             'enabled'     => get_option('woocommerce_cod_fee_enabled', 'no'),
             'amount'      => (float) get_option('woocommerce_cod_fee_amount', 5),
             'type'        => get_option('woocommerce_cod_fee_type', 'fixed'),
-            'label'       => get_option('woocommerce_cod_fee_label', __('Cash on Delivery Fee', 'wc-cod-fee')),
+            'label'       => get_option('woocommerce_cod_fee_label', __('Cash on Delivery Fee', 'wc-cod-fee-restrictions')),
             'tax_status'  => get_option('woocommerce_cod_fee_tax_status', 'taxable'),
             'min_amount'  => (float) get_option('woocommerce_cod_fee_min_amount', 0),
             'max_amount'  => (float) get_option('woocommerce_cod_fee_max_amount', 0),
@@ -505,45 +505,31 @@ final class CODFeeManager {
             return;
         }
         
-        wp_add_inline_script('wc-checkout', "
-            jQuery(function($) {
-                $(document.body).on('change', 'input[name=\"payment_method\"]', function() {
-                    $(document.body).trigger('update_checkout');
-                });
-                
-                // Also trigger on init to handle initial state
-                $(document.body).on('init_checkout', function() {
-                    $(document.body).trigger('update_checkout');
-                });
-                
-                // Display fee info in payment method label
-                var codSettings = " . json_encode($this->get_cod_settings()) . ";
-                
-                function updateCodLabel() {
-                    var label = $('label[for=\"payment_method_cod\"]');
-                    if (label.length && codSettings.enabled === 'yes' && codSettings.amount > 0) {
-                        label.find('.cod-fee-info').remove();
-                        var feeText = '';
-                        if (codSettings.type === 'percentage') {
-                            feeText = ' (+' + codSettings.amount + '%)';
-                        } else {
-                            feeText = ' (+' + parseFloat(codSettings.amount).toFixed(2) + ' ' + '" . get_woocommerce_currency_symbol() . "' + ')';
-                        }
-                        label.append('<span class=\"cod-fee-info\" style=\"color: #666; font-size: 0.9em;\">' + feeText + '</span>');
-                    }
-                }
-                
-                $(document.body).on('updated_checkout', updateCodLabel);
-                updateCodLabel();
-            });
-        ");
+        // Enqueue the external JavaScript file
+        wp_enqueue_script(
+            'wc-cod-fee-restrictions-restrictions',
+            plugin_dir_url(__FILE__) . 'assets/js/cod-fee.js',
+            ['jquery', 'wc-checkout'],
+            self::VERSION,
+            true
+        );
+        
+        // Localize script with settings
+        wp_localize_script('wc-cod-fee-restrictions-restrictions', 'wcCodFee', [
+            'codSettings' => $this->get_cod_settings(),
+            'currency' => get_woocommerce_currency(),
+            'currencySymbol' => get_woocommerce_currency_symbol(),
+            'isBlockCheckout' => class_exists('\Automattic\WooCommerce\Blocks\Package'),
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('wc-cod-fee-restrictions-restrictions'),
+        ]);
     }
     
     /**
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook): void {
-        if (strpos($hook, 'wc-cod-fee-settings') === false && 
+        if (strpos($hook, 'wc-cod-fee-restrictions-settings') === false && 
             strpos($hook, 'wc-settings') === false) {
             return;
         }
@@ -556,10 +542,10 @@ final class CODFeeManager {
                     var amountField = $('#woocommerce_cod_fee_amount');
                     if (type === 'percentage') {
                         amountField.attr('max', '100');
-                        amountField.closest('tr').find('.description').text('" . __('Enter percentage (0-100)', 'wc-cod-fee') . "');
+                        amountField.closest('tr').find('.description').text('" . __('Enter percentage (0-100)', 'wc-cod-fee-restrictions-restrictions') . "');
                     } else {
                         amountField.removeAttr('max');
-                        amountField.closest('tr').find('.description').text('" . sprintf(__('Enter amount in %s', 'wc-cod-fee'), get_woocommerce_currency()) . "');
+                        amountField.closest('tr').find('.description').text('" . sprintf(__('Enter amount in %s', 'wc-cod-fee-restrictions-restrictions'), get_woocommerce_currency()) . "');
                     }
                 }).trigger('change');
             });
@@ -601,7 +587,7 @@ final class CODFeeManager {
         if ($cod_fee) {
             ?>
             <tr>
-                <td class="label"><?php echo esc_html($cod_label ?: __('COD Fee', 'wc-cod-fee')); ?>:</td>
+                <td class="label"><?php echo esc_html($cod_label ?: __('COD Fee', 'wc-cod-fee-restrictions')); ?>:</td>
                 <td width="1%"></td>
                 <td class="total">
                     <?php echo wc_price($cod_fee, ['currency' => $order->get_currency()]); ?>
@@ -621,19 +607,19 @@ add_action('plugins_loaded', function() {
 register_activation_hook(__FILE__, function() {
     if (version_compare(PHP_VERSION, '8.0', '<')) {
         deactivate_plugins(plugin_basename(__FILE__));
-        wp_die(__('This plugin requires PHP 8.0 or higher.', 'wc-cod-fee'));
+        wp_die(__('This plugin requires PHP 8.0 or higher.', 'wc-cod-fee-restrictions'));
     }
     
     if (!class_exists('WooCommerce')) {
         deactivate_plugins(plugin_basename(__FILE__));
-        wp_die(__('This plugin requires WooCommerce to be installed and active.', 'wc-cod-fee'));
+        wp_die(__('This plugin requires WooCommerce to be installed and active.', 'wc-cod-fee-restrictions'));
     }
     
     // Set default options
     add_option('woocommerce_cod_fee_enabled', 'no');
     add_option('woocommerce_cod_fee_amount', '5');
     add_option('woocommerce_cod_fee_type', 'fixed');
-    add_option('woocommerce_cod_fee_label', __('Cash on Delivery Fee', 'wc-cod-fee'));
+    add_option('woocommerce_cod_fee_label', __('Cash on Delivery Fee', 'wc-cod-fee-restrictions'));
     add_option('woocommerce_cod_fee_tax_status', 'taxable');
     add_option('woocommerce_cod_fee_min_amount', '0');
     add_option('woocommerce_cod_fee_max_amount', '0');
