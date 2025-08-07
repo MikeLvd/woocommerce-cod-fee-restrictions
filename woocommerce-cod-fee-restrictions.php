@@ -3,12 +3,12 @@
  * Plugin Name: WooCommerce COD Fee & Restrictions Manager
  * Plugin URI: https://github.com/MikeLvd/woocommerce-cod-fee-restrictions
  * Description: Adds configurable fees and restrictions for Cash on Delivery payment method in WooCommerce 10.0+
- * Version: 2.0.0
+ * Version: 2.1.0
  * Requires at least: 6.8
  * Requires PHP: 8.0
  * Author: Mike Lvd
  * License: GPL v2 or later
- * Text Domain: wc-cod-fee-restrictions-restrictions
+ * Text Domain: wc-cod-fee-restrictions
  * WC requires at least: 9.5
  * WC tested up to: 10.0
  */
@@ -24,14 +24,14 @@ if (!in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get
 }
 
 /**
- * COD Fee Manager Class - Updated for WooCommerce 10.0
+ * COD Fee & Restrictions Manager Class - Updated for WooCommerce 10.0
  */
 final class CODFeeManager {
     
     /**
      * Plugin version
      */
-    private const VERSION = '2.0.0';
+    private const VERSION = '2.1.0';
     
     /**
      * Instance
@@ -100,6 +100,13 @@ final class CODFeeManager {
         // Alternative: Add to payment settings section
         add_filter('woocommerce_get_sections_checkout', [$this, 'add_cod_fee_section']);
         add_filter('woocommerce_get_settings_checkout', [$this, 'add_cod_fee_settings'], 10, 2);
+        
+        // Product restrictions for COD
+        add_filter('woocommerce_available_payment_gateways', [$this, 'restrict_cod_for_products']);
+        
+        // AJAX handlers for product search
+        add_action('wp_ajax_wc_cod_search_products', [$this, 'ajax_search_products']);
+        add_action('wp_ajax_wc_cod_search_categories', [$this, 'ajax_search_categories']);
     }
     
     /**
@@ -129,7 +136,7 @@ final class CODFeeManager {
      * Add settings tab to WooCommerce settings
      */
     public function add_settings_tab(array $settings_tabs): array {
-        $settings_tabs['cod_fee'] = __('COD Fee', 'wc-cod-fee-restrictions');
+        $settings_tabs['cod_fee'] = __('COD Fee & Restrictions', 'wc-cod-fee-restrictions');
         return $settings_tabs;
     }
     
@@ -137,7 +144,7 @@ final class CODFeeManager {
      * Add section to checkout settings
      */
     public function add_cod_fee_section(array $sections): array {
-        $sections['cod_fee'] = __('Cash on Delivery Fee', 'wc-cod-fee-restrictions');
+        $sections['cod_fee'] = __('Cash on Delivery Fee & Restrictions', 'wc-cod-fee-restrictions');
         return $sections;
     }
     
@@ -148,6 +155,7 @@ final class CODFeeManager {
         if ($current_section === 'cod_fee') {
             $settings = [];
             
+            // Fee Settings Section
             $settings[] = [
                 'title' => __('Cash on Delivery Fee Settings', 'wc-cod-fee-restrictions'),
                 'type'  => 'title',
@@ -241,9 +249,172 @@ final class CODFeeManager {
                 'type' => 'sectionend',
                 'id'   => 'cod_fee_options',
             ];
+            
+            // Product Restrictions Section
+            $settings[] = [
+                'title' => __('Product Restrictions', 'wc-cod-fee-restrictions'),
+                'type'  => 'title',
+                'desc'  => __('Hide Cash on Delivery option when specific products are in the cart.', 'wc-cod-fee-restrictions'),
+                'id'    => 'cod_product_restrictions',
+            ];
+            
+            $settings[] = [
+                'title'   => __('Enable Product Restrictions', 'wc-cod-fee-restrictions'),
+                'id'      => 'woocommerce_cod_restrictions_enabled',
+                'type'    => 'checkbox',
+                'default' => 'no',
+                'desc'    => __('Enable product-based restrictions for COD', 'wc-cod-fee-restrictions'),
+            ];
+            
+            $settings[] = [
+                'title'    => __('Restriction Type', 'wc-cod-fee-restrictions'),
+                'id'       => 'woocommerce_cod_restriction_type',
+                'type'     => 'select',
+                'default'  => 'products',
+                'options'  => [
+                    'products'   => __('Specific Products', 'wc-cod-fee-restrictions'),
+                    'categories' => __('Product Categories', 'wc-cod-fee-restrictions'),
+                    'both'       => __('Both Products and Categories', 'wc-cod-fee-restrictions'),
+                ],
+                'desc'     => __('Choose how to restrict COD availability', 'wc-cod-fee-restrictions'),
+                'desc_tip' => true,
+            ];
+            
+            $settings[] = [
+                'title'    => __('Restricted Products', 'wc-cod-fee-restrictions'),
+                'id'       => 'woocommerce_cod_restricted_products',
+                'type'     => 'multiselect',
+                'class'    => 'wc-product-search',
+                'css'      => 'width: 400px;',
+                'desc'     => __('Select products that will hide COD option when in cart', 'wc-cod-fee-restrictions'),
+                'desc_tip' => true,
+                'options'  => $this->get_product_options(),
+                'custom_attributes' => [
+                    'data-placeholder' => __('Search for products...', 'wc-cod-fee-restrictions'),
+                    'data-action'      => 'woocommerce_json_search_products_and_variations',
+                ],
+            ];
+            
+            $settings[] = [
+                'title'    => __('Restricted Categories', 'wc-cod-fee-restrictions'),
+                'id'       => 'woocommerce_cod_restricted_categories',
+                'type'     => 'multiselect',
+                'class'    => 'wc-enhanced-select',
+                'css'      => 'width: 400px;',
+                'desc'     => __('Select product categories that will hide COD option', 'wc-cod-fee-restrictions'),
+                'desc_tip' => true,
+                'options'  => $this->get_category_options(),
+                'custom_attributes' => [
+                    'data-placeholder' => __('Select categories...', 'wc-cod-fee-restrictions'),
+                ],
+            ];
+            
+            $settings[] = [
+                'type' => 'sectionend',
+                'id'   => 'cod_product_restrictions',
+            ];
         }
         
         return $settings;
+    }
+    
+    /**
+     * Get product options for multiselect
+     */
+    private function get_product_options(): array {
+        $product_ids = get_option('woocommerce_cod_restricted_products', []);
+        $options = [];
+        
+        if (!empty($product_ids) && is_array($product_ids)) {
+            foreach ($product_ids as $product_id) {
+                $product = wc_get_product($product_id);
+                if ($product) {
+                    $options[$product_id] = $product->get_formatted_name();
+                }
+            }
+        }
+        
+        return $options;
+    }
+    
+    /**
+     * Get category options for multiselect
+     */
+    private function get_category_options(): array {
+        $categories = get_terms([
+            'taxonomy'   => 'product_cat',
+            'hide_empty' => false,
+        ]);
+        
+        $options = [];
+        if (!is_wp_error($categories)) {
+            foreach ($categories as $category) {
+                $options[$category->term_id] = $category->name;
+            }
+        }
+        
+        return $options;
+    }
+    
+    /**
+     * AJAX handler for product search
+     */
+    public function ajax_search_products(): void {
+        check_ajax_referer('search-products', 'security');
+        
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die(-1);
+        }
+        
+        $term = isset($_GET['term']) ? (string) wc_clean(wp_unslash($_GET['term'])) : '';
+        
+        if (empty($term)) {
+            wp_die();
+        }
+        
+        $data_store = \WC_Data_Store::load('product');
+        $ids = $data_store->search_products($term, '', true, false, 10);
+        
+        $products = [];
+        foreach ($ids as $id) {
+            $product = wc_get_product($id);
+            if ($product) {
+                $products[] = [
+                    'id'   => $id,
+                    'text' => $product->get_formatted_name(),
+                ];
+            }
+        }
+        
+        wp_send_json($products);
+    }
+    
+    /**
+     * AJAX handler for category search
+     */
+    public function ajax_search_categories(): void {
+        check_ajax_referer('search-products', 'security');
+        
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die(-1);
+        }
+        
+        $categories = get_terms([
+            'taxonomy'   => 'product_cat',
+            'hide_empty' => false,
+        ]);
+        
+        $results = [];
+        if (!is_wp_error($categories)) {
+            foreach ($categories as $category) {
+                $results[] = [
+                    'id'   => $category->term_id,
+                    'text' => $category->name,
+                ];
+            }
+        }
+        
+        wp_send_json($results);
     }
     
     /**
@@ -264,97 +435,167 @@ final class CODFeeManager {
      * Get settings fields
      */
     private function get_settings_fields(): array {
-        return [
-            [
-                'title' => __('Cash on Delivery Fee Settings', 'wc-cod-fee-restrictions'),
-                'type'  => 'title',
-                'desc'  => __('Configure additional fee for Cash on Delivery payment method.', 'wc-cod-fee-restrictions'),
-                'id'    => 'cod_fee_section',
+        $fields = [];
+        
+        // Fee Settings
+        $fields[] = [
+            'title' => __('Cash on Delivery Fee Settings', 'wc-cod-fee-restrictions'),
+            'type'  => 'title',
+            'desc'  => __('Configure additional fee for Cash on Delivery payment method.', 'wc-cod-fee-restrictions'),
+            'id'    => 'cod_fee_section',
+        ];
+        
+        $fields[] = [
+            'title'   => __('Enable COD Fee', 'wc-cod-fee-restrictions'),
+            'id'      => 'woocommerce_cod_fee_enabled',
+            'type'    => 'checkbox',
+            'default' => 'no',
+            'desc'    => __('Enable Cash on Delivery fee', 'wc-cod-fee-restrictions'),
+        ];
+        
+        $fields[] = [
+            'title'             => __('Fee Amount', 'wc-cod-fee-restrictions'),
+            'id'                => 'woocommerce_cod_fee_amount',
+            'type'              => 'number',
+            'custom_attributes' => [
+                'step' => '0.01',
+                'min'  => '0',
             ],
-            [
-                'title'   => __('Enable COD Fee', 'wc-cod-fee-restrictions'),
-                'id'      => 'woocommerce_cod_fee_enabled',
-                'type'    => 'checkbox',
-                'default' => 'no',
-                'desc'    => __('Enable Cash on Delivery fee', 'wc-cod-fee-restrictions'),
-            ],
-            [
-                'title'             => __('Fee Amount', 'wc-cod-fee-restrictions'),
-                'id'                => 'woocommerce_cod_fee_amount',
-                'type'              => 'number',
-                'custom_attributes' => [
-                    'step' => '0.01',
-                    'min'  => '0',
-                ],
-                'default'           => '5',
-                'desc'              => sprintf(__('Fee amount in %s', 'wc-cod-fee-restrictions'), get_woocommerce_currency()),
-                'desc_tip'          => true,
-            ],
-            [
-                'title'    => __('Fee Type', 'wc-cod-fee-restrictions'),
-                'id'       => 'woocommerce_cod_fee_type',
-                'type'     => 'select',
-                'default'  => 'fixed',
-                'options'  => [
-                    'fixed'      => __('Fixed Amount', 'wc-cod-fee-restrictions'),
-                    'percentage' => __('Percentage', 'wc-cod-fee-restrictions'),
-                ],
-            ],
-            [
-                'title'    => __('Fee Label', 'wc-cod-fee-restrictions'),
-                'id'       => 'woocommerce_cod_fee_label',
-                'type'     => 'text',
-                'default'  => __('Cash on Delivery Fee', 'wc-cod-fee-restrictions'),
-            ],
-            [
-                'title'    => __('Tax Status', 'wc-cod-fee-restrictions'),
-                'id'       => 'woocommerce_cod_fee_tax_status',
-                'type'     => 'select',
-                'default'  => 'taxable',
-                'options'  => [
-                    'taxable' => __('Taxable', 'wc-cod-fee-restrictions'),
-                    'none'    => __('Not Taxable', 'wc-cod-fee-restrictions'),
-                ],
-            ],
-            [
-                'title'             => __('Minimum Order', 'wc-cod-fee-restrictions'),
-                'id'                => 'woocommerce_cod_fee_min_amount',
-                'type'              => 'number',
-                'custom_attributes' => [
-                    'step' => '0.01',
-                    'min'  => '0',
-                ],
-                'default'           => '0',
-                'desc_tip'          => true,
-                'desc'              => __('0 = no minimum', 'wc-cod-fee-restrictions'),
-            ],
-            [
-                'title'             => __('Maximum Order', 'wc-cod-fee-restrictions'),
-                'id'                => 'woocommerce_cod_fee_max_amount',
-                'type'              => 'number',
-                'custom_attributes' => [
-                    'step' => '0.01',
-                    'min'  => '0',
-                ],
-                'default'           => '0',
-                'desc_tip'          => true,
-                'desc'              => __('0 = no maximum', 'wc-cod-fee-restrictions'),
-            ],
-            [
-                'type' => 'sectionend',
-                'id'   => 'cod_fee_section',
+            'default'           => '5',
+            'desc'              => sprintf(__('Fee amount in %s', 'wc-cod-fee-restrictions'), get_woocommerce_currency()),
+            'desc_tip'          => true,
+        ];
+        
+        $fields[] = [
+            'title'    => __('Fee Type', 'wc-cod-fee-restrictions'),
+            'id'       => 'woocommerce_cod_fee_type',
+            'type'     => 'select',
+            'default'  => 'fixed',
+            'options'  => [
+                'fixed'      => __('Fixed Amount', 'wc-cod-fee-restrictions'),
+                'percentage' => __('Percentage', 'wc-cod-fee-restrictions'),
             ],
         ];
+        
+        $fields[] = [
+            'title'    => __('Fee Label', 'wc-cod-fee-restrictions'),
+            'id'       => 'woocommerce_cod_fee_label',
+            'type'     => 'text',
+            'default'  => __('Cash on Delivery Fee', 'wc-cod-fee-restrictions'),
+        ];
+        
+        $fields[] = [
+            'title'    => __('Tax Status', 'wc-cod-fee-restrictions'),
+            'id'       => 'woocommerce_cod_fee_tax_status',
+            'type'     => 'select',
+            'default'  => 'taxable',
+            'options'  => [
+                'taxable' => __('Taxable', 'wc-cod-fee-restrictions'),
+                'none'    => __('Not Taxable', 'wc-cod-fee-restrictions'),
+            ],
+        ];
+        
+        $fields[] = [
+            'title'             => __('Minimum Order', 'wc-cod-fee-restrictions'),
+            'id'                => 'woocommerce_cod_fee_min_amount',
+            'type'              => 'number',
+            'custom_attributes' => [
+                'step' => '0.01',
+                'min'  => '0',
+            ],
+            'default'           => '0',
+            'desc_tip'          => true,
+            'desc'              => __('0 = no minimum', 'wc-cod-fee-restrictions'),
+        ];
+        
+        $fields[] = [
+            'title'             => __('Maximum Order', 'wc-cod-fee-restrictions'),
+            'id'                => 'woocommerce_cod_fee_max_amount',
+            'type'              => 'number',
+            'custom_attributes' => [
+                'step' => '0.01',
+                'min'  => '0',
+            ],
+            'default'           => '0',
+            'desc_tip'          => true,
+            'desc'              => __('0 = no maximum', 'wc-cod-fee-restrictions'),
+        ];
+        
+        $fields[] = [
+            'type' => 'sectionend',
+            'id'   => 'cod_fee_section',
+        ];
+        
+        // Product Restrictions
+        $fields[] = [
+            'title' => __('Product Restrictions', 'wc-cod-fee-restrictions'),
+            'type'  => 'title',
+            'desc'  => __('Hide Cash on Delivery option when specific products are in the cart.', 'wc-cod-fee-restrictions'),
+            'id'    => 'cod_restrictions_section',
+        ];
+        
+        $fields[] = [
+            'title'   => __('Enable Restrictions', 'wc-cod-fee-restrictions'),
+            'id'      => 'woocommerce_cod_restrictions_enabled',
+            'type'    => 'checkbox',
+            'default' => 'no',
+            'desc'    => __('Enable product-based restrictions', 'wc-cod-fee-restrictions'),
+        ];
+        
+        $fields[] = [
+            'title'    => __('Restriction Type', 'wc-cod-fee-restrictions'),
+            'id'       => 'woocommerce_cod_restriction_type',
+            'type'     => 'select',
+            'default'  => 'products',
+            'options'  => [
+                'products'   => __('Specific Products', 'wc-cod-fee-restrictions'),
+                'categories' => __('Product Categories', 'wc-cod-fee-restrictions'),
+                'both'       => __('Both', 'wc-cod-fee-restrictions'),
+            ],
+        ];
+        
+        $fields[] = [
+            'title'    => __('Restricted Products', 'wc-cod-fee-restrictions'),
+            'id'       => 'woocommerce_cod_restricted_products',
+            'type'     => 'multiselect',
+            'class'    => 'wc-product-search',
+            'css'      => 'width: 400px;',
+            'desc_tip' => true,
+            'desc'     => __('Products that hide COD option', 'wc-cod-fee-restrictions'),
+            'options'  => $this->get_product_options(),
+            'custom_attributes' => [
+                'data-placeholder' => __('Search products...', 'wc-cod-fee-restrictions'),
+                'data-action'      => 'woocommerce_json_search_products_and_variations',
+            ],
+        ];
+        
+        $fields[] = [
+            'title'    => __('Restricted Categories', 'wc-cod-fee-restrictions'),
+            'id'       => 'woocommerce_cod_restricted_categories',
+            'type'     => 'multiselect',
+            'class'    => 'wc-enhanced-select',
+            'css'      => 'width: 400px;',
+            'desc_tip' => true,
+            'desc'     => __('Categories that hide COD option', 'wc-cod-fee-restrictions'),
+            'options'  => $this->get_category_options(),
+        ];
+        
+        $fields[] = [
+            'type' => 'sectionend',
+            'id'   => 'cod_restrictions_section',
+        ];
+        
+        return $fields;
     }
     
     /**
-     * Add admin menu
+     * Admin page
      */
     public function add_admin_menu(): void {
         add_submenu_page(
             'woocommerce',
-            __('COD Fee Settings', 'wc-cod-fee-restrictions'),
-            __('COD Fee', 'wc-cod-fee-restrictions'),
+            __('COD Fee & Restrictions Settings', 'wc-cod-fee-restrictions'),
+            __('COD Fee & Restrictions', 'wc-cod-fee-restrictions'),
             'manage_woocommerce',
             'wc-cod-fee-restrictions-settings',
             [$this, 'admin_page']
@@ -374,16 +615,14 @@ final class CODFeeManager {
     public function admin_page(): void {
         ?>
         <div class="wrap">
-            <h1><?php echo esc_html__('Cash on Delivery Fee Settings', 'wc-cod-fee-restrictions'); ?></h1>
+            <h1><?php echo esc_html__('Cash on Delivery Fee & Restrictions Settings', 'wc-cod-fee-restrictions'); ?></h1>
             
             <div class="notice notice-info">
                 <p>
                     <?php 
                     echo sprintf(
-                        __('You can also configure these settings in %sWooCommerce Settings → COD Fee%s or %sWooCommerce Settings → Payments → Cash on Delivery Fee%s', 'wc-cod-fee-restrictions'),
+                        __('You can also configure these settings in %sWooCommerce Settings → COD Fee & Restrictions%s', 'wc-cod-fee-restrictions'),
                         '<a href="' . admin_url('admin.php?page=wc-settings&tab=cod_fee') . '">',
-                        '</a>',
-                        '<a href="' . admin_url('admin.php?page=wc-settings&tab=checkout&section=cod_fee') . '">',
                         '</a>'
                     );
                     ?>
@@ -414,6 +653,74 @@ final class CODFeeManager {
             'min_amount'  => (float) get_option('woocommerce_cod_fee_min_amount', 0),
             'max_amount'  => (float) get_option('woocommerce_cod_fee_max_amount', 0),
         ];
+    }
+    
+    /**
+     * Get COD restriction settings
+     */
+    private function get_restriction_settings(): array {
+        return [
+            'enabled'     => get_option('woocommerce_cod_restrictions_enabled', 'no'),
+            'type'        => get_option('woocommerce_cod_restriction_type', 'products'),
+            'products'    => get_option('woocommerce_cod_restricted_products', []),
+            'categories'  => get_option('woocommerce_cod_restricted_categories', []),
+        ];
+    }
+    
+    /**
+     * Check if cart has restricted products
+     */
+    private function cart_has_restricted_products(): bool {
+        if (!WC()->cart) {
+            return false;
+        }
+        
+        $settings = $this->get_restriction_settings();
+        
+        if ($settings['enabled'] !== 'yes') {
+            return false;
+        }
+        
+        $restricted_products = is_array($settings['products']) ? $settings['products'] : [];
+        $restricted_categories = is_array($settings['categories']) ? $settings['categories'] : [];
+        
+        foreach (WC()->cart->get_cart() as $cart_item) {
+            $product_id = $cart_item['product_id'];
+            $variation_id = $cart_item['variation_id'] ?? 0;
+            
+            // Check specific products
+            if (($settings['type'] === 'products' || $settings['type'] === 'both') && !empty($restricted_products)) {
+                if (in_array($product_id, $restricted_products) || 
+                    ($variation_id && in_array($variation_id, $restricted_products))) {
+                    return true;
+                }
+            }
+            
+            // Check categories
+            if (($settings['type'] === 'categories' || $settings['type'] === 'both') && !empty($restricted_categories)) {
+                $product_categories = wp_get_post_terms($product_id, 'product_cat', ['fields' => 'ids']);
+                if (array_intersect($product_categories, $restricted_categories)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Restrict COD payment method based on products
+     */
+    public function restrict_cod_for_products($available_gateways): array {
+        if (!is_checkout() && !wp_doing_ajax()) {
+            return $available_gateways;
+        }
+        
+        if ($this->cart_has_restricted_products() && isset($available_gateways['cod'])) {
+            unset($available_gateways['cod']);
+        }
+        
+        return $available_gateways;
     }
     
     /**
@@ -478,6 +785,11 @@ final class CODFeeManager {
             return;
         }
         
+        // Don't add fee if COD is restricted
+        if ($this->cart_has_restricted_products()) {
+            return;
+        }
+        
         $settings = $this->get_cod_settings();
         $fee_amount = $this->calculate_fee_amount($settings);
         
@@ -507,7 +819,7 @@ final class CODFeeManager {
         
         // Enqueue the external JavaScript file
         wp_enqueue_script(
-            'wc-cod-fee-restrictions-restrictions',
+            'wc-cod-fee-restrictions',
             plugin_dir_url(__FILE__) . 'assets/js/cod-fee.js',
             ['jquery', 'wc-checkout'],
             self::VERSION,
@@ -515,13 +827,15 @@ final class CODFeeManager {
         );
         
         // Localize script with settings
-        wp_localize_script('wc-cod-fee-restrictions-restrictions', 'wcCodFee', [
+        wp_localize_script('wc-cod-fee-restrictions', 'wcCodFee', [
             'codSettings' => $this->get_cod_settings(),
+            'restrictionSettings' => $this->get_restriction_settings(),
+            'hasRestrictedProducts' => $this->cart_has_restricted_products(),
             'currency' => get_woocommerce_currency(),
             'currencySymbol' => get_woocommerce_currency_symbol(),
             'isBlockCheckout' => class_exists('\Automattic\WooCommerce\Blocks\Package'),
             'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('wc-cod-fee-restrictions-restrictions'),
+            'nonce' => wp_create_nonce('wc-cod-fee-restrictions'),
         ]);
     }
     
@@ -534,6 +848,10 @@ final class CODFeeManager {
             return;
         }
         
+        // Enqueue WooCommerce admin scripts for product search
+        wp_enqueue_script('wc-enhanced-select');
+        wp_enqueue_style('woocommerce_admin_styles');
+        
         wp_add_inline_script('jquery', "
             jQuery(function($) {
                 // Dynamic preview of fee settings
@@ -542,10 +860,40 @@ final class CODFeeManager {
                     var amountField = $('#woocommerce_cod_fee_amount');
                     if (type === 'percentage') {
                         amountField.attr('max', '100');
-                        amountField.closest('tr').find('.description').text('" . __('Enter percentage (0-100)', 'wc-cod-fee-restrictions-restrictions') . "');
+                        amountField.closest('tr').find('.description').text('" . __('Enter percentage (0-100)', 'wc-cod-fee-restrictions') . "');
                     } else {
                         amountField.removeAttr('max');
-                        amountField.closest('tr').find('.description').text('" . sprintf(__('Enter amount in %s', 'wc-cod-fee-restrictions-restrictions'), get_woocommerce_currency()) . "');
+                        amountField.closest('tr').find('.description').text('" . sprintf(__('Enter amount in %s', 'wc-cod-fee-restrictions'), get_woocommerce_currency()) . "');
+                    }
+                }).trigger('change');
+                
+                // Show/hide restriction fields based on enabled state
+                $('#woocommerce_cod_restrictions_enabled').on('change', function() {
+                    var isEnabled = $(this).is(':checked');
+                    var restrictionRows = $('#woocommerce_cod_restriction_type, #woocommerce_cod_restricted_products, #woocommerce_cod_restricted_categories').closest('tr');
+                    
+                    if (isEnabled) {
+                        restrictionRows.show();
+                    } else {
+                        restrictionRows.hide();
+                    }
+                }).trigger('change');
+                
+                // Show/hide fields based on restriction type
+                $('#woocommerce_cod_restriction_type').on('change', function() {
+                    var type = $(this).val();
+                    var productRow = $('#woocommerce_cod_restricted_products').closest('tr');
+                    var categoryRow = $('#woocommerce_cod_restricted_categories').closest('tr');
+                    
+                    if (type === 'products') {
+                        productRow.show();
+                        categoryRow.hide();
+                    } else if (type === 'categories') {
+                        productRow.hide();
+                        categoryRow.show();
+                    } else {
+                        productRow.show();
+                        categoryRow.show();
                     }
                 }).trigger('change');
             });
@@ -623,4 +971,10 @@ register_activation_hook(__FILE__, function() {
     add_option('woocommerce_cod_fee_tax_status', 'taxable');
     add_option('woocommerce_cod_fee_min_amount', '0');
     add_option('woocommerce_cod_fee_max_amount', '0');
+    
+    // New restriction options
+    add_option('woocommerce_cod_restrictions_enabled', 'no');
+    add_option('woocommerce_cod_restriction_type', 'products');
+    add_option('woocommerce_cod_restricted_products', []);
+    add_option('woocommerce_cod_restricted_categories', []);
 });
