@@ -1,6 +1,6 @@
 /**
- * WooCommerce COD Fee Handler
- * Version: 1.0.0
+ * WooCommerce COD Fee & Restrictions Handler
+ * Version: 1.1.0
  */
 
 (function($) {
@@ -33,7 +33,6 @@
         // Handle checkout updates
         $(document.body).on('updated_checkout', function() {
             isUpdating = false;
-            updateFeeDisplay();
         });
         
         // Initialize on load
@@ -42,7 +41,6 @@
             if (initialMethod) {
                 lastPaymentMethod = initialMethod;
             }
-            updateFeeDisplay();
         });
         
         // Handle country/state changes (might affect tax)
@@ -64,55 +62,6 @@
         
         isUpdating = true;
         $(document.body).trigger('update_checkout');
-    }
-    
-    /**
-     * Update fee display in payment method label
-     */
-    function updateFeeDisplay() {
-        const settings = wcCodFee.codSettings;
-        
-        if (!settings || settings.enabled !== 'yes') {
-            return;
-        }
-        
-        const $codLabel = $('label[for="payment_method_cod"]');
-        
-        if ($codLabel.length) {
-            // Remove existing fee display
-            $codLabel.find('.cod-fee-info').remove();
-            
-            // Add fee information
-            let feeText = '';
-            if (settings.type === 'percentage') {
-                feeText = `(+${settings.amount}% ${settings.label})`;
-            } else if (settings.amount > 0) {
-                // Format with currency
-                const formattedAmount = new Intl.NumberFormat(
-                    document.documentElement.lang || 'en-US',
-                    { 
-                        style: 'currency', 
-                        currency: wcCodFee.currency || 'USD',
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2
-                    }
-                ).format(settings.amount);
-                
-                feeText = `(+${formattedAmount} ${settings.label})`;
-            }
-            
-            if (feeText) {
-                $codLabel.append(`
-                    <span class="cod-fee-info" style="
-                        display: inline-block;
-                        margin-left: 8px;
-                        font-size: 0.9em;
-                        color: #666;
-                        font-weight: normal;
-                    ">${feeText}</span>
-                `);
-            }
-        }
     }
     
     /**
@@ -141,7 +90,8 @@
                     document.dispatchEvent(new CustomEvent('cod_payment_selected', {
                         detail: { 
                             selected: currentMethod === 'cod',
-                            settings: wcCodFee.codSettings 
+                            settings: wcCodFee.codSettings,
+                            hasRestrictedProducts: wcCodFee.hasRestrictedProducts
                         }
                     }));
                 }
