@@ -843,61 +843,53 @@ final class CODFeeManager {
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook): void {
+        // Only load on our settings pages
         if (strpos($hook, 'wc-cod-fee-restrictions-settings') === false && 
             strpos($hook, 'wc-settings') === false) {
             return;
         }
         
-        // Enqueue WooCommerce admin scripts for product search
+        // Check if we're on the COD Fee tab specifically
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : '';
+        $current_section = isset($_GET['section']) ? sanitize_text_field($_GET['section']) : '';
+        
+        if ($current_tab !== 'cod_fee' && 
+            $current_tab !== 'checkout' && 
+            strpos($hook, 'wc-cod-fee-restrictions-settings') === false) {
+            return;
+        }
+        
+        // Enqueue WooCommerce admin scripts for enhanced selects
         wp_enqueue_script('wc-enhanced-select');
         wp_enqueue_style('woocommerce_admin_styles');
         
-        wp_add_inline_script('jquery', "
-            jQuery(function($) {
-                // Dynamic preview of fee settings
-                $('#woocommerce_cod_fee_type').on('change', function() {
-                    var type = $(this).val();
-                    var amountField = $('#woocommerce_cod_fee_amount');
-                    if (type === 'percentage') {
-                        amountField.attr('max', '100');
-                        amountField.closest('tr').find('.description').text('" . __('Enter percentage (0-100)', 'wc-cod-fee-restrictions') . "');
-                    } else {
-                        amountField.removeAttr('max');
-                        amountField.closest('tr').find('.description').text('" . sprintf(__('Enter amount in %s', 'wc-cod-fee-restrictions'), get_woocommerce_currency()) . "');
-                    }
-                }).trigger('change');
-                
-                // Show/hide restriction fields based on enabled state
-                $('#woocommerce_cod_restrictions_enabled').on('change', function() {
-                    var isEnabled = $(this).is(':checked');
-                    var restrictionRows = $('#woocommerce_cod_restriction_type, #woocommerce_cod_restricted_products, #woocommerce_cod_restricted_categories').closest('tr');
-                    
-                    if (isEnabled) {
-                        restrictionRows.show();
-                    } else {
-                        restrictionRows.hide();
-                    }
-                }).trigger('change');
-                
-                // Show/hide fields based on restriction type
-                $('#woocommerce_cod_restriction_type').on('change', function() {
-                    var type = $(this).val();
-                    var productRow = $('#woocommerce_cod_restricted_products').closest('tr');
-                    var categoryRow = $('#woocommerce_cod_restricted_categories').closest('tr');
-                    
-                    if (type === 'products') {
-                        productRow.show();
-                        categoryRow.hide();
-                    } else if (type === 'categories') {
-                        productRow.hide();
-                        categoryRow.show();
-                    } else {
-                        productRow.show();
-                        categoryRow.show();
-                    }
-                }).trigger('change');
-            });
-        ");
+        // Enqueue our admin script
+        wp_enqueue_script(
+            'wc-cod-fee-restrictions-admin',
+            plugin_dir_url(__FILE__) . 'assets/js/admin-cod-fee.js',
+            ['jquery', 'wc-enhanced-select'],
+            self::VERSION,
+            true
+        );
+        
+        // Localize script with necessary data
+        wp_localize_script('wc-cod-fee-restrictions-admin', 'wcCodFeeAdmin', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'searchNonce' => wp_create_nonce('search-products'),
+            'currency' => get_woocommerce_currency(),
+            'currencySymbol' => get_woocommerce_currency_symbol(),
+            'i18n' => [
+                'percentageDesc' => __('Enter percentage (0-100)', 'wc-cod-fee-restrictions'),
+                'amountDesc' => sprintf(
+                    __('Enter amount in %s', 'wc-cod-fee-restrictions'), 
+                    get_woocommerce_currency()
+                ),
+                'selectProducts' => __('Search for products...', 'wc-cod-fee-restrictions'),
+                'selectCategories' => __('Select categories...', 'wc-cod-fee-restrictions'),
+                'searchingText' => __('Searching...', 'wc-cod-fee-restrictions'),
+                'noResults' => __('No results found', 'wc-cod-fee-restrictions'),
+            ]
+        ]);
     }
     
     /**
